@@ -3,7 +3,7 @@
 #
 # user changeable parameters
 #
-HDA="/home/amd/fedora-30.raw"
+HDA=""
 MEM="2048"
 SMP="4"
 VNC=""
@@ -16,8 +16,10 @@ SEV_SNP="0"
 ALLOW_DEBUG="0"
 USE_GDB="0"
 
-EXEC_PATH="./usr/local"
+EXEC_PATH="$(readlink -f "$(dirname "$0")")/usr/local"
 UEFI_PATH="$EXEC_PATH/share/qemu"
+HDA="$EXEC_PATH/share/snp-qemu/debian-11-nocloud-amd64.qcow2"
+KERNEL_FILE="$EXEC_PATH/share/snp-qemu/vmlinuz"
 
 usage() {
 	echo "$0 [options]"
@@ -264,7 +266,7 @@ if [ "${KERNEL_FILE}" != "" ]; then
 	if [ -n "$APPEND" ]; then
 		add_opts "-append \"$APPEND\""
 	else
-		add_opts "-append \"console=ttyS0 earlyprintk=serial root=/dev/sda2\""
+		add_opts "-append \"console=ttyS0 earlyprintk=serial root=/dev/sda1 panic=1\""
 	fi
 	[ -n "${INITRD_FILE}" ] && add_opts "-initrd ${INITRD_FILE}"
 fi
