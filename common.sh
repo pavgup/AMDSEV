@@ -58,8 +58,8 @@ build_kernel()
 			# If ${KERNEL_GIT_URL} is ever changed, 'current' remote will be out
 			# of date, so always update the remote URL first
 			run_cmd git remote set-url current ${KERNEL_GIT_URL}
-			run_cmd git fetch current
-			run_cmd git checkout current/${BRANCH}
+			run_cmd git fetch current ${BRANCH}
+			run_cmd git checkout FETCH_HEAD
 			COMMIT=$(git log --format="%h" -1 HEAD)
 
 			run_cmd "cp /boot/config-$(uname -r) .config"
