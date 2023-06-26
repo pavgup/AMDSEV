@@ -1,0 +1,22 @@
+name: build host kernel
+on:
+  push:
+    branches:
+    - sev-snp-devel
+  workflow_dispatch:
+
+jobs:
+    build-host-kernel:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout
+          uses: actions/checkout@v2
+        - name: Build host kernel
+          run: |
+            ./build-host.sh
+        - name: Archive artifacts
+          uses: actions/upload-artifact@v2
+          with:
+            name: host-kernel
+            path: |
+              **/*.deb
