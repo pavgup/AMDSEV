@@ -70,7 +70,7 @@ build_kernel()
 				run_cmd ./scripts/config --enable VIRT_DRIVERS
 				run_cmd ./scripts/config --enable SEV_GUEST
 			else
-				run_cmd "cp /boot/config-$(uname -r) .config"
+				cp ../../host-config .config
 				run_cmd ./scripts/config --module  SEV_GUEST
 			fi
 			run_cmd ./scripts/config --set-str LOCALVERSION "$VER-$COMMIT"
