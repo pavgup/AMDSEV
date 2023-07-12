@@ -4,7 +4,7 @@ SEV-SNP isolated nested guests using KVM on Azure's DCa_cc_v5/ECa_cc_v5 instance
 ## Deploy an Azure VM
 
 A preconfigured VM image based on Ubuntu 20.04 has been published to a publicly accessible
-community gallery for quick validation. The VM image is present in East US and West Europe.
+community gallery for quick validation. The VM gallery image is present in East US.
 
 Deploy the SNP host VM using azure cli:
 ```
