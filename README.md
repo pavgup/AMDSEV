@@ -231,6 +231,9 @@ https://github.com/AMDESE/AMDSEV/tree/sev-snp-devel.
 Install packer and then:
 
 ```
+# export these variables before the build
+export AZURE_SUBSCRIPTION_ID=...
+export AZURE_RESOURCE_GROUP=...
 cd packer
 make resourcegroup
 make gallery
