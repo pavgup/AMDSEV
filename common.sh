@@ -44,6 +44,18 @@ build_kernel()
 			BRANCH="${KERNEL_HOST_BRANCH}"
 		fi
 
+		# If ${KERNEL_GIT_URL} is ever changed, 'current' remote will be out
+		# of date, so always update the remote URL first. Also handle case
+		# where AMDSEV scripts are updated while old kernel repos are still in
+		# the directory without a 'current' remote
+		pushd ${V} >/dev/null
+		if git remote get-url current 2>/dev/null; then
+			run_cmd git remote set-url current ${KERNEL_GIT_URL}
+		else
+			run_cmd git remote add current ${KERNEL_GIT_URL}
+		fi
+		popd >/dev/null
+
 		# Nuke any previously built packages so they don't end up in new tarballs
 		# when ./build.sh --package is specified
 		rm -f linux-*-snp-${V}*
@@ -55,9 +67,6 @@ build_kernel()
 		run_cmd $MAKE distclean
 
 		pushd ${V} >/dev/null
-			# If ${KERNEL_GIT_URL} is ever changed, 'current' remote will be out
-			# of date, so always update the remote URL first
-			run_cmd git remote set-url current ${KERNEL_GIT_URL}
 			run_cmd git fetch current ${BRANCH}
 			run_cmd git checkout FETCH_HEAD
 			COMMIT=$(git log --format="%h" -1 HEAD)
@@ -75,6 +84,7 @@ build_kernel()
 			fi
 			run_cmd ./scripts/config --set-str LOCALVERSION "$VER-$COMMIT"
 			run_cmd ./scripts/config --disable LOCALVERSION_AUTO
+			run_cmd ./scripts/config --enable  EXPERT
 			run_cmd ./scripts/config --enable  DEBUG_INFO
 			run_cmd ./scripts/config --enable  DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
 			run_cmd ./scripts/config --enable  DEBUG_INFO_REDUCED
@@ -84,6 +94,7 @@ build_kernel()
 			run_cmd ./scripts/config --module  CRYPTO_DEV_CCP_DD
 			run_cmd ./scripts/config --disable SYSTEM_TRUSTED_KEYS
 			run_cmd ./scripts/config --disable SYSTEM_REVOCATION_KEYS
+			run_cmd ./scripts/config --disable MODULE_SIG_KEY
 			run_cmd ./scripts/config --disable IOMMU_DEFAULT_PASSTHROUGH
 			run_cmd ./scripts/config --disable PREEMPT_COUNT
 			run_cmd ./scripts/config --disable PREEMPTION
@@ -93,6 +104,9 @@ build_kernel()
 			run_cmd ./scripts/config --enable IKCONFIG_PROC
 			run_cmd ./scripts/config --enable UNWINDER_FRAME_POINTER
 			run_cmd ./scripts/config --enable STACK_VALIDATION
+			run_cmd ./scripts/config --enable  CGROUP_MISC
+			run_cmd ./scripts/config --module  X86_CPUID
+			run_cmd ./scripts/config --disable UBSAN
 		popd >/dev/null
 
 		yes "" | $MAKE olddefconfig
@@ -126,15 +140,24 @@ build_install_ovmf()
 
 	BUILD_CMD="nice build -q --cmd-len=64436 -DDEBUG_ON_SERIAL_PORT=TRUE -n $(getconf _NPROCESSORS_ONLN) ${GCCVERS:+-t $GCCVERS} -a X64 -p OvmfPkg/OvmfPkgX64.dsc"
 
-	[ -d ovmf ] || {
-		run_cmd git clone --single-branch -b ${OVMF_BRANCH} ${OVMF_GIT_URL} ovmf
-
+	# initialize git repo, or update existing remote to currently configured one
+	if [ -d ovmf ]; then
 		pushd ovmf >/dev/null
-			run_cmd git submodule update --init --recursive
+		if git remote get-url current 2>/dev/null; then
+			run_cmd git remote set-url current ${OVMF_GIT_URL}
+		else
+			run_cmd git remote add current ${OVMF_GIT_URL}
+		fi
 		popd >/dev/null
-	}
+	else
+		run_cmd git clone --single-branch -b ${OVMF_BRANCH} ${OVMF_GIT_URL} ovmf
+		run_cmd git remote add current ${OVMF_GIT_URL}
+	fi
 
 	pushd ovmf >/dev/null
+		run_cmd git fetch current
+		run_cmd git checkout current/${OVMF_BRANCH}
+		run_cmd git submodule update --init --recursive
 		run_cmd make -C BaseTools
 		. ./edksetup.sh --reconfig
 		run_cmd $BUILD_CMD
@@ -149,11 +172,25 @@ build_install_qemu()
 {
 	DEST="$1"
 
-	[ -d qemu ] || run_cmd git clone --single-branch -b ${QEMU_BRANCH} ${QEMU_GIT_URL} qemu
+	# initialize git repo, or update existing remote to currently configured one
+	if [ -d qemu ]; then
+		pushd qemu >/dev/null
+		if git remote get-url current 2>/dev/null; then
+			run_cmd git remote set-url current ${QEMU_GIT_URL}
+		else
+			run_cmd git remote add current ${QEMU_GIT_URL}
+		fi
+		popd >/dev/null
+	else
+		run_cmd git clone --single-branch -b ${QEMU_BRANCH} ${QEMU_GIT_URL} qemu
+		run_cmd git remote add current ${QEMU_GIT_URL}
+	fi
 
 	MAKE="make -j $(getconf _NPROCESSORS_ONLN) LOCALVERSION="
 
 	pushd qemu >/dev/null
+		run_cmd git fetch current
+		run_cmd git checkout current/${QEMU_BRANCH}
 		run_cmd ./configure --target-list=x86_64-softmmu --prefix=$DEST
 		run_cmd $MAKE
 		run_cmd $MAKE install

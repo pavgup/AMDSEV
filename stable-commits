@@ -4,18 +4,20 @@
 
 # hypervisor commit
 KERNEL_GIT_URL="https://github.com/jepio/linux.git"
-KERNEL_HOST_BRANCH="jepio-nested-snp-5.19-v9"
-KERNEL_GUEST_BRANCH="v6.1.29"
+KERNEL_HOST_BRANCH="nested-snp-upm-20230818"
+KERNEL_GUEST_BRANCH="v6.4.12"
 
 # qemu commit
 QEMU_GIT_URL="https://github.com/AMDESE/qemu.git"
-QEMU_BRANCH="snp-v3"
+QEMU_BRANCH="snp-latest"
 
 # guest bios
-#   This will use a stable tag that is known to work with the specified
-#   level of hypervisor. An AP creation fix added after this tag exposed
-#   a hypervisor bug and breaks AP booting with the specified level of the
-#   hypervisor. Please report any failures with this level of UEFI/OVMF,
-#   so they can be addressed.
-OVMF_GIT_URL="https://github.com/tianocore/edk2.git"
-OVMF_BRANCH="edk2-stable202302"
+#   An AP creation fix added after the 'edk2-stable202302' tag/release is
+#   known to break AP booting on older SNP hypervisor/host kernels based
+#   on the 5.19 kernel tree. If you are building packages to be used in
+#   conjunction with this older 5.19 level of SNP hypervisor support,
+#   please use the 'sev-snp-legacy' branch of this AMDSEV repo instead,
+#   which will build the latest known-working QEMU/OVMF trees for older
+#   SNP hypervisor/host kernels.
+OVMF_GIT_URL="https://github.com/AMDESE/ovmf.git"
+OVMF_BRANCH="snp-latest"

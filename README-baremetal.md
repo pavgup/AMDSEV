@@ -1,6 +1,13 @@
-PLEASE NOTE: the development trees used to build these packages are no longer actively developed. To build using the latest SNP development trees please use the [snp-latest](https://github.com/amdese/amdsev/tree/snp-latest) branch of this repo.
-
 Follow the below steps to build and run the SEV-SNP guest. The step below are tested on Ubuntu 20.04 host and guest.
+
+## Upgrading from 5.19-based SNP hypervisor/host kernels
+
+This repo will build host/guest kernel, QEMU, and OVMF packages that are known to work against the latest development for tree SNP host/hypervisor support. If you are building packages to use in conjunction with an older 5.19-based SNP host/hypervisor kernel, then please use the [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) branch of this repo instead, which will ensure that compatible QEMU/OVMF trees are used instead. Please consider switching to the latest development trees used by this branch however, as [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) is no longer being actively developed.
+
+Newer SNP host/kernel support now relies on new kernel infrastructure for managing private guest memory called restrictedmem[1] (a.k.a. Unmapped Private Memory). This reliance on restrictedmem brings about some new requirements/limitations in the current tree that users should be aware:
+* Assigning NUMA affinities for private guest memory is not supported.
+* Guest private memory is now accounted as shared memory rather than used memory, so please take this into account when monitoring memory usage.
+* The QEMU command-line options to launch an SEV-SNP guest have changed. Setting these options will be handled automatically when using the launch-qemu.sh script mentioned in the instructions below. If launching QEMU directly, please still reference the script to determine the correct QEMU options to use.
 
 ## Build
 
@@ -8,7 +15,7 @@ The following command builds the host and guest Linux kernel, qemu and ovmf bios
 
 ````
 # git clone https://github.com/AMDESE/AMDSEV.git
-# git checkout sev-snp-devel
+# git checkout snp-latest
 # ./build.sh --package
 # sudo cp kvm.conf /etc/modprobe.d/
 ````
@@ -91,16 +98,17 @@ AMD Memory Encryption Features active: SEV SEV-ES SEV-SNP
 
 ## Upgrade SEV firmware
 
-The SEV-SNP support requires firmware version >= 1.51:1 (or 1.33 in hexadecimal, which is what developer.amd.com uses when uploading firmware versions). The latest SEV-SNP firmware is available on https://developer.amd.com/sev and via the linux-firmware project.
+The SEV-SNP support requires firmware version >= 1.51:1 (or 1.33 in hexadecimal). The latest SEV-SNP firmware is available on https://developer.amd.com/sev and via the linux-firmware project.
 
-The below steps document the firmware upgrade process for the latest SEV-SNP firmware available on https://developer.amd.com/sev at the time this was written. A similar procedure can be used for newer firmwares as well:
+The steps below document the firmware upgrade process for the latest SEV-SNP firmware available on https://developer.amd.com/sev at the time this was written. Currently, these steps only apply for Milan systems. A similar procedure can be used for newer firmwares as well:
 
 ```
-# wget https://developer.amd.com/wp-content/resources/amd_sev_fam19h_model0xh_1.33.03.zip
-# unzip amd_sev_fam19h_model0xh_1.33.03.zip
+# wget https://download.amd.com/developer/eula/sev/amd_sev_fam19h_model0xh_1.54.01.zip
+# unzip amd_sev_fam19h_model0xh_1.54.01.zip
 # sudo mkdir -p /lib/firmware/amd
-# sudo cp amd_sev_fam19h_model0xh_1.33.03.sbin /lib/firmware/amd/amd_sev_fam19h_model0xh.sbin
+# sudo cp amd_sev_fam19h_model0xh_1.54.01.sbin /lib/firmware/amd/amd_sev_fam19h_model0xh.sbin
 ```
+
 Then either reboot the host, or reload the ccp driver to complete the firmware upgrade process:
 
 ```
@@ -110,7 +118,16 @@ sudo modprobe ccp
 sudo modprobe kvm_amd
 ```
 
+Current Milan SEV/SNP FW requires a PSP BootLoader version of 00.13.00.70 or greater. Milan AGESA PI 1.0.0.9 included a sufficient PSP BootLoader. Attempting to update to current SEV FW with an older BootLoader will fail. If the following error appears after updating the firmware manually, update the system to the latest available BIOS:
+
+```
+$ sudo dmesg | grep -i sev
+[    4.364896] ccp 0000:47:00.1: SEV: failed to INIT error 0x1, rc -5
+```
+For Genoa firmware updates, the system BIOS has to be updated to get the latest sev firmware.
 
 ## Reference
 
 https://developer.amd.com/sev/
+
+[1] restrictedmem (a.k.a. Unmapped Private Memory): https://lore.kernel.org/lkml/20221202061347.1070246-1-chao.p.peng@linux.intel.com/

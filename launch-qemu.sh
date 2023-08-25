@@ -9,6 +9,9 @@ SMP="4"
 VNC=""
 CONSOLE="serial"
 USE_VIRTIO="1"
+DISCARD="none"
+USE_DEFAULT_NETWORK="0"
+CPU_MODEL="EPYC-v4"
 
 SEV="0"
 SEV_ES="0"
@@ -27,15 +30,20 @@ usage() {
 	echo " -sev               launch SEV guest"
 	echo " -sev-es            launch SEV guest"
 	echo " -sev-snp           launch SNP guest"
+	echo " -enable-discard    for SNP, discard memory after conversion. (worse boot-time performance, but less memory usage)"
 	echo " -bios              the bios to use (default $UEFI_PATH)"
 	echo " -hda PATH          hard disk file (default $HDA)"
 	echo " -mem MEM           guest memory size in MB (default $MEM)"
 	echo " -smp NCPUS         number of virtual cpus (default $SMP)"
+	echo " -cpu CPU_MODEL     QEMU CPU model/type to use (default $CPU_MODEL)."
+	echo "                    You can also specify additional CPU flags, e.g. -cpu $CPU_MODEL,+avx512f,+avx512dq"
 	echo " -allow-debug       dump vmcb on exit and enable the trace"
 	echo " -kernel PATH       kernel to use"
 	echo " -initrd PATH       initrd to use"
 	echo " -append ARGS       kernel command line arguments to use"
 	echo " -cdrom PATH        CDROM image"
+	echo " -default-network   enable default usermode networking"
+	echo "                    (Requires that QEMU is built on a host that supports libslirp-dev 4.7 or newer)"
 	exit 1
 }
 
@@ -90,6 +98,9 @@ while [ -n "$1" ]; do
 				SEV_ES="1"
 				SEV="1"
 				;;
+		-enable-discard)
+				DISCARD="both"
+				;;
 		-sev-es)	SEV_ES="1"
 				SEV="1"
 				;;
@@ -102,6 +113,9 @@ while [ -n "$1" ]; do
 				shift
 				;;
 		-smp)		SMP="$2"
+				shift
+				;;
+		-cpu)		CPU_MODEL="$2"
 				shift
 				;;
 		-bios)          UEFI_PATH="$2"
@@ -120,6 +134,9 @@ while [ -n "$1" ]; do
 				;;
 		-cdrom)		CDROM_FILE="$2"
 				shift
+				;;
+		-default-network)
+				USE_DEFAULT_NETWORK="1"
 				;;
 		*) 		usage
 				;;
@@ -196,13 +213,13 @@ rm -rf $QEMU_CMDLINE
 add_opts "$QEMU_EXE"
 
 # Basic virtual machine property
-add_opts "-enable-kvm -cpu EPYC-v4 -machine q35"
+add_opts "-enable-kvm -cpu ${CPU_MODEL} -machine q35"
 
 # add number of VCPUs
-[ -n "${SMP}" ] && add_opts "-smp ${SMP},maxcpus=64"
+[ -n "${SMP}" ] && add_opts "-smp ${SMP},maxcpus=255"
 
 # define guest memory
-add_opts "-m ${MEM}M,slots=5,maxmem=30G"
+add_opts "-m ${MEM}M,slots=5,maxmem=$((${MEM} + 8192))M"
 
 # don't reboot for SEV-ES guest
 add_opts "-no-reboot"
@@ -216,11 +233,15 @@ add_opts "-drive if=pflash,format=raw,unit=1,file=${UEFI_VARS}"
 # add CDROM if specified
 [ -n "${CDROM_FILE}" ] && add_opts "-drive file=${CDROM_FILE},media=cdrom -boot d"
 
-# add network support and fwd port 22 to 8000
-# echo "guest port 22 is fwd to host 8000..."
-#add_opts "-netdev user,id=vmnic,hostfwd=tcp::8000-:22 -device e1000,netdev=vmnic,romfile="
-add_opts "-netdev user,id=vmnic"
-add_opts " -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile="
+# NOTE: as of QEMU 7.2.0, libslirp-dev 4.7+ is needed, but fairly recent
+# distros like Ubuntu 20.04 still only provide 4.1, so only enable
+# usermode network if specifically requested.
+if [ "$USE_DEFAULT_NETWORK" = "1" ]; then
+    #echo "guest port 22 is fwd to host 8000..."
+    #add_opts "-netdev user,id=vmnic,hostfwd=tcp::8000-:22 -device e1000,netdev=vmnic,romfile="
+    add_opts "-netdev user,id=vmnic"
+    add_opts " -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile="
+fi
 
 # If harddisk file is specified then add the HDD drive
 if [ -n "${HDA}" ]; then
@@ -254,7 +275,9 @@ if [ ${SEV} = "1" ]; then
 	fi
 
 	if [ "${SEV_SNP}" = 1 ]; then
-		add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1"
+		add_opts "-object memory-backend-memfd-private,id=ram1,size=${MEM}M,share=true"
+		add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1,discard=${DISCARD}"
+		add_opts "-machine memory-backend=ram1,kvm-type=protected"
 	else
 		add_opts "-object sev-guest,id=sev0${SEV_POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
 	fi

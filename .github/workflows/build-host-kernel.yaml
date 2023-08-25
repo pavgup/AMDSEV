@@ -3,6 +3,7 @@ on:
   push:
     branches:
     - sev-snp-devel
+    - nested-snp-upm
   workflow_dispatch:
 
 jobs:
