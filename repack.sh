@@ -19,7 +19,8 @@ apt-get install $(ls ./snp-release-$(date +%F)/linux/guest/linux-image*snp-guest
 cp /boot/vmlinuz*snp-guest* ${PACKAGE_NAME}-${PACKAGE_VERSION}/
 pushd ${PACKAGE_NAME}-${PACKAGE_VERSION}
 ln -sf vmlinuz*snp-guest* vmlinuz 
-wget -nc https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-nocloud-amd64.qcow2
+img=debian-12-nocloud-amd64.qcow2
+wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/${img}
 popd
 
 pushd ${PACKAGE_NAME}-${PACKAGE_VERSION}
@@ -49,9 +50,11 @@ override_dh_auto_install:
 	tar -xpzf snp-release.tar.gz --strip-components=1 -C debian/${PACKAGE_NAME}
 	cd debian/${PACKAGE_NAME} && mv launch-qemu.sh usr/local/bin/
 	cd debian/${PACKAGE_NAME} && rm -rf kvm.conf install.sh linux
-	cd debian/${PACKAGE_NAME}/usr/local/bin && sed -ie 's|^EXEC_PATH.*|EXEC_PATH="\$\$(readlink -f "\$\$(dirname "\$\$0")/..")"|' launch-qemu.sh
+	cd debian/${PACKAGE_NAME}/usr/local/bin && sed -i \
+-e 's|^EXEC_PATH.*|EXEC_PATH="\$\$(readlink -f "\$\$(dirname "\$\$0")/..")"|' \
+-e 's|^HDA=.*|HDA="\$\$EXEC_PATH/share/snp-qemu/${img}"|' launch-qemu.sh
 	install -d -m 755 debian/${PACKAGE_NAME}/usr/local/share/${PACKAGE_NAME}/
-	install -m 644 -t debian/${PACKAGE_NAME}/usr/local/share/${PACKAGE_NAME}/ debian-11-nocloud-amd64.qcow2
+	install -m 644 -t debian/${PACKAGE_NAME}/usr/local/share/${PACKAGE_NAME}/ ${img}
 	install -m 644 -t debian/${PACKAGE_NAME}/usr/local/share/${PACKAGE_NAME}/ vmlinuz* 
 
 override_dh_usrlocal:
