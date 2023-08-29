@@ -4,8 +4,8 @@ set -xe
 export DEBIAN_FRONTEND=noninteractive
 
 pushd /tmp/
-wget -nv https://github.com/jepio/AMDSEV/releases/download/v2023.05.25/linux-image-5.19.0-rc6-snp-host-46751c721588_5.19.0-rc6-snp-host-46751c721588-1_amd64.deb
-wget -nv https://github.com/jepio/AMDSEV/releases/download/v2023.05.25/snp-qemu_2023.05.25-0_amd64.deb
+wget -nv https://github.com/jepio/AMDSEV/releases/download/v2023.08.18/linux-image-6.5.0-rc2-snp-host-967d27d1acd2_6.5.0-rc2-g967d27d1acd2-2_amd64.deb
+wget -nv https://github.com/jepio/AMDSEV/releases/download/v2023.08.18/snp-qemu_2023.08.29-0_amd64.deb
 apt-get update
 apt-get install -y -f ./*.deb
 
