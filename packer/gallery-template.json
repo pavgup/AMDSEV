@@ -26,7 +26,7 @@
         "[resourceId('Microsoft.Compute/galleries', parameters('galleries_name'))]"
       ],
       "location": "[resourceGroup().location]",
-      "name": "[concat(parameters('galleries_name'), '/ubuntu2004-snp-host')]",
+      "name": "[concat(parameters('galleries_name'), '/ubu2204-snp-host-upm')]",
       "properties": {
         "architecture": "x64",
         "hyperVGeneration": "V2",
@@ -35,7 +35,7 @@
         "identifier": {
             "publisher": "[parameters('publisher_name')]",
             "offer": "ubuntu",
-            "sku": "2004-snp-host"
+            "sku": "2204-snp-host-upm"
         }
       },
       "type": "Microsoft.Compute/galleries/images"
