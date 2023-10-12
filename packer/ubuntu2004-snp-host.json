@@ -14,14 +14,14 @@
       "resource_group": "{{user `resource_group`}}",
       "gallery_name": "{{user `gallery_name`}}",
       "image_name": "ubuntu2004-snp-host",
-      "image_version": "0.20230525.1",
-      "replication_regions": ["eastus"],
+      "image_version": "0.20231011.0",
+      "replication_regions": ["eastus","westeurope","northeurope","westus","eastus2euap"],
       "storage_account_type": "Standard_LRS"
     },
 
     "azure_tags": {
-      "AMDSEV-version": "v2023.05.25",
-      "kernel-version": "5.19.0-rc6-snp-host-46751c721588"
+      "AMDSEV-version": "v2023.10.11",
+      "kernel-version": "5.19.0-rc6-snp-host-dcfe71004119"
     },
 
     "os_type": "Linux",
