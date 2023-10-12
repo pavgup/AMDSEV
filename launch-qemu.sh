@@ -15,6 +15,7 @@ SEV_ES="0"
 SEV_SNP="0"
 ALLOW_DEBUG="0"
 USE_GDB="0"
+HOSTDATA=""
 
 EXEC_PATH="$(readlink -f "$(dirname "$0")")/usr/local"
 UEFI_PATH="$EXEC_PATH/share/qemu"
@@ -36,6 +37,7 @@ usage() {
 	echo " -initrd PATH       initrd to use"
 	echo " -append ARGS       kernel command line arguments to use"
 	echo " -cdrom PATH        CDROM image"
+	echo " -host-data         32-byte base64 encoded host-data string"
 	exit 1
 }
 
@@ -121,6 +123,9 @@ while [ -n "$1" ]; do
 		-cdrom)		CDROM_FILE="$2"
 				shift
 				;;
+                -host-data)     HOSTDATA="$2"
+                                shift
+                                ;;
 		*) 		usage
 				;;
 	esac
@@ -253,8 +258,11 @@ if [ ${SEV} = "1" ]; then
 		SEV_POLICY=$(printf ",policy=%#x" $POLICY)
 	fi
 
+	if [ -n "${HOSTDATA}" ]; then
+               HOSTDATA=",host-data=${HOSTDATA}"
+	fi
 	if [ "${SEV_SNP}" = 1 ]; then
-		add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1"
+		add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1$HOSTDATA"
 	else
 		add_opts "-object sev-guest,id=sev0${SEV_POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
 	fi
