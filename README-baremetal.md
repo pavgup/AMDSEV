@@ -1,10 +1,37 @@
-Follow the below steps to build and run the SEV-SNP guest. The step below are tested on Ubuntu 20.04 host and guest.
+## Overview
+
+This repo will build host/guest kernel, QEMU, and OVMF packages that are known to work in conjunction with the latest development trees for SNP host/hypervisor support. The build scripts will utilize the latest published [development tree for the SNP host kernel](https://github.com/amdese/linux/tree/snp-host-latest), which will generally correspond to the latest patchset posted upstream along with fixes/changes on top resulting from continued development/testing and upstream review. It will also utilize the latest published [development tree for QEMU](https://github.com/amdese/qemu/tree/snp-latest).
+
+Note that SNP hypervisor support is still being actively developed/upstreamed and should be used only for preview/testing/development purposes. Please report any issues with it or any other components built by these scripts via the issue tracker for this repo [here](https://github.com/AMDESE/AMDSEV/issues).
+
+Follow the below steps to build the required components and launch an SEV-SNP guest. These steps are tested primarily in conjunction with Ubuntu 22.04 hosts/guests, but other distros are supported to some degree by contributors to this repo.
+
+## Upgrading from 6.6-based SNP hypervisor/host kernels
+
+QEMU command-line options have changed for basic booting of SNP guests. Please see the launch-qemu.sh script in this repository for updated options.
+
+There is also now a new -certs option for launch-qemu.sh, which corresponds to a new QEMU 'certs-path' parameter (see launch-qemu.sh for specifics) that needs to be set when specifying a certificate blob to be passed to guests when they request an attestation report via extended guest requests. This was previously handled via the SNP_SET_EXT_CONFIG SEV device IOCTL, which handled both updating the ReportedTCB for the system in conjunction with updating the certificate blob corresponding to the attestation report signatures associated with that particular ReportedTCB. These 2 tasks are now handled separately:
+
+ * certificate updates are handled by simply updated the certificate blob file specified by the above-mentioned -certs-path parameter
+ * ReportedTCB updates are handled by a new IOCTL, SNP_SET_CONFIG, which is similar to SNP_SET_EXTENDED_CONFIG, but no longer provides any handling for certificate updates.
+
+There are also 2 new IOCTLs, SNP_SET_CONFIG_START/SNP_SET_CONFIG_END, which can be used in cases where there are running SNP guests on a system and the ReportedTCB and certs file updates need to done atomically relative to any attestation requests that might be issued while updating those 2 things.
+
+The SNP_GET_EXT_CONFIG has also been removed, since without any handling for certificates it is now redundant with the information already available via the SNP_PLATFORM_STATUS IOCTL.
+
+For more details on any of the above IOCTLs, see the latest [SEV IOCTL documentation](https://github.com/AMDESE/linux/blob/snp-host-latest/Documentation/virt/coco/sev-guest.rst) in the kernel.
+
+Various host-side tools need to be updated to handle these changes, so if you are relying on any such tools to handle the above tasks, please verify whether or not the necessary changes are in place yet and plan accordingly.
+
+## Upgrading from 6.5-based SNP hypervisor/host kernels
+
+If you were previously using a build based on kernel 6.5-rc2 host kernel, you may notice a drop in boot-time performance switch over to the latest kernel. This is due to [SRSO mitigations](https://www.amd.com/content/dam/amd/en/documents/corporate/cr/speculative-return-stack-overflow-whitepaper.pdf) that were added in later versions of kernel 6.5 and enabled by default. While it is not recommended, you can use the 'spec_rstack_overflow=off' kernel command-line options in both host and guest to disable these mitigations for the purposes of evaluating performance differences vs. previous builds.
 
 ## Upgrading from 5.19-based SNP hypervisor/host kernels
 
-This repo will build host/guest kernel, QEMU, and OVMF packages that are known to work against the latest development for tree SNP host/hypervisor support. If you are building packages to use in conjunction with an older 5.19-based SNP host/hypervisor kernel, then please use the [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) branch of this repo instead, which will ensure that compatible QEMU/OVMF trees are used instead. Please consider switching to the latest development trees used by this branch however, as [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) is no longer being actively developed.
+If you are building packages to use in conjunction with an older 5.19-based SNP host/hypervisor kernel, then please use the [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) branch of this repo instead, which will ensure that compatible QEMU/OVMF trees are used instead. Please consider switching to the latest development trees used by this branch however, as [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) is no longer being actively developed.
 
-Newer SNP host/kernel support now relies on new kernel infrastructure for managing private guest memory called restrictedmem[1] (a.k.a. Unmapped Private Memory). This reliance on restrictedmem brings about some new requirements/limitations in the current tree that users should be aware:
+Newer SNP host/kernel support now relies on new kernel infrastructure for managing private guest memory called guest_memfd[1] (a.k.a. "gmem", or "Unmapped Private Memory"). This reliance on guest_memfd brings about some new requirements/limitations in the current tree that users should be aware:
 * Assigning NUMA affinities for private guest memory is not supported.
 * Guest private memory is now accounted as shared memory rather than used memory, so please take this into account when monitoring memory usage.
 * The QEMU command-line options to launch an SEV-SNP guest have changed. Setting these options will be handled automatically when using the launch-qemu.sh script mentioned in the instructions below. If launching QEMU directly, please still reference the script to determine the correct QEMU options to use.
@@ -23,7 +50,7 @@ On succesful build, the binaries will be available in `snp-release-<DATE>`.
 
 ## Prepare Host
 
-Verify that the following BIOS settings are enabled. The setting may vary based on the vendor BIOS. The menu option below are from AMD BIOS.
+Verify that the following BIOS settings are enabled. The setting may vary based on the vendor BIOS. The menu options below are from an AMD BIOS.
   
 ```
   CBS -> CPU Common ->
@@ -130,4 +157,4 @@ For Genoa firmware updates, the system BIOS has to be updated to get the latest 
 
 https://developer.amd.com/sev/
 
-[1] restrictedmem (a.k.a. Unmapped Private Memory): https://lore.kernel.org/lkml/20221202061347.1070246-1-chao.p.peng@linux.intel.com/
+[1] guest_memfd (a.k.a. "gmem", or "Unmapped Private Memory"): https://lore.kernel.org/kvm/20230914015531.1419405-1-seanjc@google.com/
