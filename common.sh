@@ -146,7 +146,7 @@ build_kernel()
 		yes "" | $MAKE olddefconfig
 
 		# Build 
-		run_cmd $MAKE >/dev/null
+		run_cmd $MAKE
 
 		if [ "$ID" = "debian" ] || [ "$ID_LIKE" = "debian" ]; then
 			run_cmd $MAKE bindeb-pkg
