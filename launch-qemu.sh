@@ -22,6 +22,7 @@ SEV_ES="0"
 SEV_SNP="0"
 ALLOW_DEBUG="0"
 USE_GDB="0"
+QCOW_OVERLAY="0"
 
 EXEC_PATH="$(readlink -f "$(dirname "$0")")/usr/local"
 UEFI_PATH="$EXEC_PATH/share/qemu"
@@ -51,6 +52,7 @@ usage() {
 	echo " -monitor PATH      Path to QEMU monitor socket (default: $MONITOR_PATH)"
 	echo " -log PATH          Path to QEMU console log (default: $QEMU_CONSOLE_LOG)"
 	echo " -certs PATH        Path to SNP certificate blob for guest (default: none)"
+	echo " -overlay           Use a temporary qcow2 overlay on top of the passed disk"
 	exit 1
 }
 
@@ -153,6 +155,8 @@ while [ -n "$1" ]; do
 				;;
 		-certs) CERTS_PATH="$2"
 				shift
+				;;
+		-overlay) QCOW_OVERLAY="1"
 				;;
 		*) 		usage
 				;;
@@ -261,6 +265,13 @@ fi
 
 # If harddisk file is specified then add the HDD drive
 if [ -n "${HDA}" ]; then
+	if [[ ${HDA} = *"qcow2" ]] && [ "${QCOW_OVERLAY}" = 1 ]; then
+		TMP="disk-${GUEST_NAME}.qcow2"
+		if [ ! -f "${TMP}" ]; then
+			qemu-img create -f qcow2 -b "${HDA}" -F qcow2 "${TMP}" 30G
+		fi
+		HDA="${TMP}"
+	fi
 	if [ "$USE_VIRTIO" = "1" ]; then
 		if [[ ${HDA} = *"qcow2" ]]; then
 			add_opts "-drive file=${HDA},if=none,id=disk0,format=qcow2"
