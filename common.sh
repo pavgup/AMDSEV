@@ -78,9 +78,12 @@ build_kernel()
 				run_cmd ./scripts/config --enable CRYPTO
 				run_cmd ./scripts/config --enable VIRT_DRIVERS
 				run_cmd ./scripts/config --enable SEV_GUEST
+				run_cmd ./scripts/config --enable DEBUG_SPINLOCK
+				run_cmd ./scripts/config --set-val RCU_CPU_STALL_TIMEOUT 15
 			else
 				cp ../../host-config .config
 				run_cmd ./scripts/config --module  SEV_GUEST
+				run_cmd ./scripts/config --enable HYPERV_PSP
 			fi
 			run_cmd ./scripts/config --set-str LOCALVERSION "$VER-$COMMIT"
 			run_cmd ./scripts/config --disable LOCALVERSION_AUTO
