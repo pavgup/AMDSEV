@@ -9,7 +9,7 @@ RUN apt-get update && \
   apt-get build-dep -y qemu-system && \
   apt-get build-dep -y ovmf
 
-RUN apt-get update && apt-get install -y devscripts cpio zstd rsync kmod dracut vim
+RUN apt-get update && apt-get install -y devscripts cpio zstd rsync kmod dracut vim python3-venv
 
 ENV PATH="/usr/lib/ccache:$PATH"
 ENV CCACHE_COMPRESS=true
