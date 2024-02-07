@@ -1,8 +1,7 @@
-name: build host kernel
+name: build snp-qemu
 on:
   push:
     branches:
-    - sev-snp-devel
     - nested-snp-upm
   workflow_dispatch:
 
@@ -18,13 +17,13 @@ jobs:
           uses: actions/checkout@v2
         - name: ccache
           uses: hendrikmuhs/ccache-action@v1.2
-        - name: Build host kernel
+        - name: Build SNP qemu
           run: |
-            export PATH="/usr/lib/ccache:$PATH"
-            ./build-host.sh
+            ./run.sh
         - name: Archive artifacts
           uses: actions/upload-artifact@v2
           with:
-            name: host-kernel
+            name: artifacts
             path: |
-              linux/*.deb
+              snp-qemu*.*
+              source-commit.*
