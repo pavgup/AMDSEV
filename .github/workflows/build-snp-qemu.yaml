@@ -10,13 +10,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-    build-host-kernel:
+    build-snp-qemu:
         runs-on: ubuntu-latest
         steps:
+        - name: Make space
+          run: |
+            df -h $GITHUB_WORKSPACE
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+            sudo rm -rf /usr/local/lib/android /opt/ghc
+            df -h $GITHUB_WORKSPACE
+
         - name: Checkout
           uses: actions/checkout@v2
         - name: ccache
           uses: hendrikmuhs/ccache-action@v1.2
+          with:
+            max-size: "1G"
         - name: Build SNP qemu
           run: |
             ./run.sh
