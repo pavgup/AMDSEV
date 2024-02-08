@@ -14,14 +14,14 @@
       "resource_group": "{{user `resource_group`}}",
       "gallery_name": "{{user `gallery_name`}}",
       "image_name": "ubu2204-snp-host-upm",
-      "image_version": "0.20230818.1",
+      "image_version": "0.20240207.2",
       "replication_regions": ["eastus", "westeurope"],
       "storage_account_type": "Standard_LRS"
     },
 
     "azure_tags": {
-      "AMDSEV-version": "v2023.08.18",
-      "kernel-version": "6.5.0-rc2-snp-host-967d27d1acd2"
+      "AMDSEV-version": "v2024.02.07",
+      "kernel-version": "6.7.0-rc6-next-20231222-snp-host-0fcebf5ce3fe"
     },
 
     "os_type": "Linux",

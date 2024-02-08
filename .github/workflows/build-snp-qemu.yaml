@@ -35,5 +35,5 @@ jobs:
           with:
             name: artifacts
             path: |
-              snp-qemu*.*
+              snp-qemu_*.*
               source-commit.*
