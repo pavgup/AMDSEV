@@ -11,7 +11,7 @@ Deploy the SNP host VM using azure cli:
 az group create -g <group> -l eastus
 az vm create -g <group> -n <name> \
   --image /CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubuntu2004-snp-host/Versions/latest \
-  --accept-term --size Standard_DC8as_cc_v5 --accelerated-networking true
+  --accept-term --size Standard_DC8as_cc_v5 --accelerated-networking true --security-type standard
 ```
 
 ## Verify SNP functionality
