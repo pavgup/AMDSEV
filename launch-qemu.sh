@@ -3,7 +3,8 @@
 #
 # user changeable parameters
 #
-HDA="/home/amd/fedora-30.raw"
+# Fetch using: wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-amd64.qcow2
+HDA="./debian-12-nocloud-amd64.qcow2"
 MEM="2048"
 SMP="4"
 VNC=""
@@ -244,7 +245,7 @@ add_opts "-no-reboot"
 # The OVMF binary, including the non-volatile variable store, appears as a
 # "normal" qemu drive on the host side, and it is exposed to the guest as a
 # persistent flash device.
-if [ "${SEV_SNP}" = 1 ]; then
+if [ "${SEV_SNP}" = 2 ]; then
     add_opts "-bios ${UEFI_CODE}"
 else
     add_opts "-drive if=pflash,format=raw,unit=0,file=${UEFI_CODE},readonly"
@@ -318,7 +319,7 @@ if [ "${KERNEL_FILE}" != "" ]; then
 	if [ -n "$APPEND" ]; then
 		add_opts "-append \"$APPEND\""
 	else
-		add_opts "-append \"console=ttyS0 earlyprintk=serial root=/dev/sda2\""
+		add_opts "-append \"console=ttyS0 earlyprintk=serial root=/dev/sda1 panic=1\""
 	fi
 	[ -n "${INITRD_FILE}" ] && add_opts "-initrd ${INITRD_FILE}"
 fi

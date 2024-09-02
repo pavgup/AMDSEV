@@ -71,7 +71,20 @@ build_kernel()
 			run_cmd git checkout current/${BRANCH}
 			COMMIT=$(git log --format="%h" -1 HEAD)
 
-			run_cmd "cp /boot/config-$(uname -r) .config"
+			if [ "${V}" = "guest" ]; then
+				make x86_64_defconfig
+				make kvm_guest.config
+				run_cmd ./scripts/config --enable AMD_MEM_ENCRYPT
+				run_cmd ./scripts/config --enable CRYPTO
+				run_cmd ./scripts/config --enable VIRT_DRIVERS
+				run_cmd ./scripts/config --enable SEV_GUEST
+				run_cmd ./scripts/config --enable DEBUG_SPINLOCK
+				run_cmd ./scripts/config --set-val RCU_EXP_CPU_STALL_TIMEOUT 15
+			else
+				run_cmd "cp /boot/config-$(uname -r) .config"
+				run_cmd ./scripts/config --module  SEV_GUEST
+				run_cmd ./scripts/config --set-val RCU_EXP_CPU_STALL_TIMEOUT 1000
+			fi
 			run_cmd ./scripts/config --set-str LOCALVERSION "$VER-$COMMIT"
 			run_cmd ./scripts/config --disable LOCALVERSION_AUTO
 			run_cmd ./scripts/config --enable  EXPERT
@@ -93,7 +106,6 @@ build_kernel()
 			run_cmd ./scripts/config --enable  CGROUP_MISC
 			run_cmd ./scripts/config --module  X86_CPUID
 			run_cmd ./scripts/config --disable UBSAN
-			run_cmd ./scripts/config --set-val RCU_EXP_CPU_STALL_TIMEOUT 1000
 			run_cmd ./scripts/config --disable MLX4_EN
 			run_cmd ./scripts/config --module MLX4_EN
 			run_cmd ./scripts/config --enable MLX4_EN_DCB
@@ -156,7 +168,12 @@ build_install_ovmf()
 		GCCVERS="GCC5"
 	fi
 
+	FOLDER="DEBUG"
 	BUILD_CMD="nice build -q --cmd-len=64436 -DDEBUG_ON_SERIAL_PORT=TRUE -n $(getconf _NPROCESSORS_ONLN) ${GCCVERS:+-t $GCCVERS} -a X64 -p OvmfPkg/OvmfPkgX64.dsc"
+	if [ "$2" = "release" ]; then
+		FOLDER="RELEASE"
+		BUILD_CMD+=" -b RELEASE"
+	fi
 
 	# initialize git repo, or update existing remote to currently configured one
 	if [ -d ovmf ]; then
@@ -183,9 +200,9 @@ build_install_ovmf()
 		run_cmd $BUILD_CMD
 
 		mkdir -p $DEST
-		run_cmd cp -f Build/OvmfX64/DEBUG_$GCCVERS/FV/OVMF_CODE.fd $DEST
-		run_cmd cp -f Build/OvmfX64/DEBUG_$GCCVERS/FV/OVMF_VARS.fd $DEST
-		run_cmd cp -f Build/OvmfX64/DEBUG_$GCCVERS/FV/OVMF.fd $DEST
+		run_cmd cp -f Build/OvmfX64/${FOLDER}_$GCCVERS/FV/OVMF_CODE.fd $DEST
+		run_cmd cp -f Build/OvmfX64/${FOLDER}_$GCCVERS/FV/OVMF_VARS.fd $DEST
+		run_cmd cp -f Build/OvmfX64/${FOLDER}_$GCCVERS/FV/OVMF.fd $DEST
 
 		COMMIT=$(git log --format="%h" -1 HEAD)
 		run_cmd echo $COMMIT >../source-commit.ovmf
@@ -217,6 +234,8 @@ build_install_qemu()
 	pushd qemu >/dev/null
 		run_cmd git fetch current
 		run_cmd git checkout current/${QEMU_BRANCH}
+		run_cmd git apply -v ../qemu.patch
+		run_cmd git diff
 		run_cmd ./configure --target-list=x86_64-softmmu --prefix=$DEST
 		run_cmd $MAKE
 		run_cmd $MAKE install

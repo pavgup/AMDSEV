@@ -62,12 +62,18 @@ else
 	qemu)
 		build_install_qemu "$INSTALL_DIR"
 		;;
+	ovmf-release)
+		build_install_ovmf "$INSTALL_DIR/share/qemu" "release"
+		;;
 	ovmf)
 		build_install_ovmf "$INSTALL_DIR/share/qemu"
 		;;
 	kernel)
 		# additional argument of "host" or "guest" can be added to limit build to that type
 		build_kernel $2
+		;;
+	skip)
+		echo "packaging only"
 		;;
 	esac
 fi
