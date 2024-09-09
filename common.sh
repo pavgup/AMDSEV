@@ -81,7 +81,7 @@ build_kernel()
 				run_cmd ./scripts/config --enable DEBUG_SPINLOCK
 				run_cmd ./scripts/config --set-val RCU_EXP_CPU_STALL_TIMEOUT 15
 			else
-				run_cmd "cp /boot/config-$(uname -r) .config"
+				cp ../../host-config .config
 				run_cmd ./scripts/config --module  SEV_GUEST
 				run_cmd ./scripts/config --set-val RCU_EXP_CPU_STALL_TIMEOUT 1000
 			fi
