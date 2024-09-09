@@ -3,7 +3,9 @@
 #
 # user changeable parameters
 #
-HDA=""
+# Fetch using: wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-amd64.qcow2
+HDA="./debian-12-nocloud-amd64.qcow2"
+
 MEM="2048"
 SMP="4"
 VNC=""
@@ -195,6 +197,9 @@ QEMU_EXE="$(readlink -e $TMP)"
 }
 
 TMP="$UEFI_PATH/OVMF_CODE.fd"
+if [ "${SEV_SNP}" = 1 ]; then
+	TMP="$UEFI_PATH/OVMF.fd"
+fi
 UEFI_CODE="$(readlink -e $TMP)"
 [ -z "$UEFI_CODE" ] && {
 	echo "Can't locate UEFI code file [$TMP]"
@@ -247,8 +252,12 @@ add_opts "-no-reboot"
 # The OVMF binary, including the non-volatile variable store, appears as a
 # "normal" qemu drive on the host side, and it is exposed to the guest as a
 # persistent flash device.
-add_opts "-drive if=pflash,format=raw,unit=0,file=${UEFI_CODE},readonly"
-add_opts "-drive if=pflash,format=raw,unit=1,file=${UEFI_VARS}"
+if [ "${SEV_SNP}" = 2 ]; then
+    add_opts "-bios ${UEFI_CODE}"
+else
+    add_opts "-drive if=pflash,format=raw,unit=0,file=${UEFI_CODE},readonly"
+    add_opts "-drive if=pflash,format=raw,unit=1,file=${UEFI_VARS}"
+fi
 
 # add CDROM if specified
 [ -n "${CDROM_FILE}" ] && add_opts "-drive file=${CDROM_FILE},media=cdrom -boot d"
@@ -294,23 +303,27 @@ if [ ${SEV} = "1" ]; then
 	add_opts "-machine memory-encryption=sev0,vmport=off" 
 	get_cbitpos
 
-	if [ "${ALLOW_DEBUG}" = "1" -o "${SEV_ES}" = 1 ]; then
-		POLICY=$((0x01))
-		[ "${ALLOW_DEBUG}" = "1" ] && POLICY=$((POLICY & ~0x01))
-		[ "${SEV_ES}" = "1" ] && POLICY=$((POLICY | 0x04))
-		SEV_POLICY=$(printf ",policy=%#x" $POLICY)
-	fi
-
 	if [ "${SEV_SNP}" = 1 ]; then
+		POLICY=$((0x30000))
+		[ -n "${ALLOW_DEBUG}" ] && POLICY=$((POLICY | 0x80000))
+
+		POLICY=$(printf "%#x" $POLICY)
+
 		add_opts "-object memory-backend-memfd,id=ram1,size=${MEM}M,share=true,prealloc=false"
 		add_opts "-machine memory-backend=ram1"
 		if [ "${CERTS_PATH}" != "" ]; then
-			add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1,certs-path=${CERTS_PATH}"
+			add_opts "-object sev-snp-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1,certs-path=${CERTS_PATH}"
 		else
-			add_opts "-object sev-snp-guest,id=sev0,cbitpos=${CBITPOS},reduced-phys-bits=1"
+			add_opts "-object sev-snp-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
 		fi
 	else
-		add_opts "-object sev-guest,id=sev0${SEV_POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
+		POLICY=$((0x01))
+		[ -n "${SEV_ES}" ] && POLICY=$((POLICY | 0x04))
+		[ -n "${ALLOW_DEBUG}" ] && POLICY=$((POLICY & ~0x01))
+
+		POLICY=$(printf "%#x" $POLICY)
+
+		add_opts "-object sev-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
 	fi
 fi
 

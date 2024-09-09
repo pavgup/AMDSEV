@@ -1,254 +1,180 @@
-This repository contains scripts used to build a kernel + userspace to support
-SEV-SNP isolated nested guests using KVM on Azure's DCa_cc_v5/ECa_cc_v5 instances.
+## Overview
 
-## Deploy an Azure VM
+This repo will build host/guest kernel, QEMU, and OVMF packages that are known to work in conjunction with the latest development trees for SNP host/hypervisor support. The build scripts will utilize the latest published [development tree for the SNP host kernel](https://github.com/amdese/linux/tree/snp-host-latest), which will generally correspond to the latest patchset posted upstream along with fixes/changes on top resulting from continued development/testing and upstream review. It will also utilize the latest published [development tree for QEMU](https://github.com/amdese/qemu/tree/snp-latest).
 
-A preconfigured VM image based on Ubuntu 20.04 has been published to a publicly accessible
-community gallery for quick validation. The VM gallery image is present in East US.
+Note that SNP hypervisor support is still being actively developed/upstreamed and should be used only for preview/testing/development purposes. Please report any issues with it or any other components built by these scripts via the issue tracker for this repo [here](https://github.com/AMDESE/AMDSEV/issues).
 
-Deploy the SNP host VM using azure cli:
+Follow the below steps to build the required components and launch an SEV-SNP guest. These steps are tested primarily in conjunction with Ubuntu 22.04 hosts/guests, but other distros are supported to some degree by contributors to this repo.
+
+NOTE: If you're building from an existing checkout of this repo and have build issues with edk2, delete the ovmf/ directory prior to starting the build so that it can be re-initialized cleanly.
+
+## Upgrading from 6.9.0-rc1-based SNP hypervisor/host kernels
+
+This repo is now periodically sync'd with the latest upstream SNP KVM patches, which were merged in the upstream [kvm/next tree](https://git.kernel.org/pub/scm/virt/kvm/kvm.git/log/?h=next) as of 2024-05-12.
+
+Based on the discussion regarding the final submission of the patches, the SNP_PAUSE_ATTESTATION/SNP_RESUME_ATTESTATION interfaces mentioned below have been removed in favor of an alternative approach that is still being discussed upstream. Will update this section when that approach is finalized, but until then it is recommended to not update firmware endorsement keys or associated certificates while an SNP guest is running unless it is known that attestation requests will not be made by the guest while the update of said key/certificate is taking place.
+
+## Upgrading from 6.8.0-rc5-based SNP hypervisor/host kernels
+
+QEMU command-line options have changed for basic booting of SNP guests. Please see the launch-qemu.sh script in this repository for updated options.
+
+The latest upstream version guest_memfd (which the SNP KVM support relies on) no longer supports 2MB hugepages for backing guests. There are discussions on how best to re-enable this support, but in the meantime SNP guests will utilize 4K pages for private guest memory. Please keep this in mind for any performance-related testing/observations.
+
+SNP KVM support is now based on top of the new KVM_SEV_INIT2 ioctl, which deprecates the older KVM_SEV_INIT, KVM_SEV_ES_INIT, and KVM_SEV_SNP_INIT ioctls that VMMs previously relied on for starting SEV/SEV-ES/SEV-SNP guests, respectively. This newer KVM_SEV_INIT2 interface syncs additional VMSA state for SEV-ES and SEV-SNP, which will result in different measurement calculations. Additionally, the 'vmsa_features' field of the VMSA will no longer have SVM_SEV_FEAT_DEBUG_SWAP (bit 5) set according to kvm_amd.debug_swap module parameter, and will instead default to 0. More information on the specific VMSA differences are available [here](https://lore.kernel.org/kvm/20240409230743.962513-1-michael.roth@amd.com/), along with details on how to modify the QEMU machine type to continue utilizing the older KVM_SEV_ES_INIT interface for SEV-ES guests to retain the legacy handling. For SNP, the new interface/handling is required.
+
+The SNP_SET_CONFIG_START/SNP_SET_CONFIG_END ioctls mentioned below have now been renamed to SNP_PAUSE_ATTESTATION/SNP_RESUME_ATTESTATION. Please see Section 2.7 [here](https://github.com/AMDESE/linux/blob/snp-host-v12/Documentation/virt/coco/sev-guest.rst) for more details on usage.
+
+It is also worth noting that a patched OVMF is now required to boot SNP guests using the latest kernel. The 'snp-latest' branch referenced in the stable-commits file contains the required patch and will be used automatically when building from source using the scripts in this repo.
+
+## Upgrading from 6.6-based SNP hypervisor/host kernels
+
+QEMU command-line options have changed for basic booting of SNP guests. Please see the launch-qemu.sh script in this repository for updated options.
+
+There is also now a new -certs option for launch-qemu.sh, which corresponds to a new QEMU 'certs-path' parameter (see launch-qemu.sh for specifics) that needs to be set when specifying a certificate blob to be passed to guests when they request an attestation report via extended guest requests. This was previously handled via the SNP_SET_EXT_CONFIG SEV device IOCTL, which handled both updating the ReportedTCB for the system in conjunction with updating the certificate blob corresponding to the attestation report signatures associated with that particular ReportedTCB. These 2 tasks are now handled separately:
+
+ * certificate updates are handled by simply updated the certificate blob file specified by the above-mentioned -certs-path parameter
+ * ReportedTCB updates are handled by a new IOCTL, SNP_SET_CONFIG, which is similar to SNP_SET_EXTENDED_CONFIG, but no longer provides any handling for certificate updates.
+
+There are also 2 new IOCTLs, SNP_SET_CONFIG_START/SNP_SET_CONFIG_END, which can be used in cases where there are running SNP guests on a system and the ReportedTCB and certs file updates need to done atomically relative to any attestation requests that might be issued while updating those 2 things.
+
+The SNP_GET_EXT_CONFIG has also been removed, since without any handling for certificates it is now redundant with the information already available via the SNP_PLATFORM_STATUS IOCTL.
+
+For more details on any of the above IOCTLs, see the latest [SEV IOCTL documentation](https://github.com/AMDESE/linux/blob/snp-host-latest/Documentation/virt/coco/sev-guest.rst) in the kernel.
+
+Various host-side tools need to be updated to handle these changes, so if you are relying on any such tools to handle the above tasks, please verify whether or not the necessary changes are in place yet and plan accordingly.
+
+## Upgrading from 6.5-based SNP hypervisor/host kernels
+
+If you were previously using a build based on kernel 6.5-rc2 host kernel, you may notice a drop in boot-time performance switch over to the latest kernel. This is due to [SRSO mitigations](https://www.amd.com/content/dam/amd/en/documents/corporate/cr/speculative-return-stack-overflow-whitepaper.pdf) that were added in later versions of kernel 6.5 and enabled by default. While it is not recommended, you can use the 'spec_rstack_overflow=off' kernel command-line options in both host and guest to disable these mitigations for the purposes of evaluating performance differences vs. previous builds.
+
+## Upgrading from 5.19-based SNP hypervisor/host kernels
+
+If you are building packages to use in conjunction with an older 5.19-based SNP host/hypervisor kernel, then please use the [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) branch of this repo instead, which will ensure that compatible QEMU/OVMF trees are used instead. Please consider switching to the latest development trees used by this branch however, as [sev-snp-devel](https://github.com/amdese/amdsev/tree/sev-snp-devel) is no longer being actively developed.
+
+Newer SNP host/kernel support now relies on new kernel infrastructure for managing private guest memory called guest_memfd[1] (a.k.a. "gmem", or "Unmapped Private Memory"). This reliance on guest_memfd brings about some new requirements/limitations in the current tree that users should be aware:
+* Assigning NUMA affinities for private guest memory is not supported.
+* Guest private memory is now accounted as shared memory rather than used memory, so please take this into account when monitoring memory usage.
+* The QEMU command-line options to launch an SEV-SNP guest have changed. Setting these options will be handled automatically when using the launch-qemu.sh script mentioned in the instructions below. If launching QEMU directly, please still reference the script to determine the correct QEMU options to use.
+
+## Build
+
+The following command builds the host and guest Linux kernel, qemu and ovmf bios used for launching SEV-SNP guest.
+
+````
+# git clone https://github.com/AMDESE/AMDSEV.git
+# git checkout snp-latest
+# ./build.sh --package
+# sudo cp kvm.conf /etc/modprobe.d/
+````
+On succesful build, the binaries will be available in `snp-release-<DATE>`.
+
+## Prepare Host
+
+Verify that the following BIOS settings are enabled. The setting may vary based on the vendor BIOS. The menu options below are from an AMD BIOS.
+  
 ```
-az group create -g <group> -l eastus
-az vm create -g <group> -n <name> \
-  --image /CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubuntu2004-snp-host/Versions/latest \
-  --accept-term --size Standard_DC8as_cc_v5 --accelerated-networking true
+  CBS -> CPU Common ->
+                SEV-ES ASID space Limit Control -> Manual
+                SEV-ES ASID space limit -> 100
+                SNP Memory Coverage -> Enabled 
+                SMEE -> Enabled
+      -> NBIO common ->
+                SEV-SNP -> Enabled
 ```
-
-## Verify SNP functionality
-
-Once the VM has been provisioned, ssh into it.
-
-Check dmesg for correct SNP initialization in the SNP host VM:
-```
-$ uname -r
-5.19.0-rc6-snp-host-46751c721588
-
-$ sudo dmesg | grep -Ee 'SEV|SNP|ccp|kvm'
-[    0.647052] SEV-SNP: RMP table physical address 0x00000008b7300000 - 0x00000008bfffffff
-[    2.137453] ccp psp: sev enabled
-[    2.137499] ccp psp: psp enabled
-[    2.137501] ccp psp: enabled
-[    2.143452] ccp psp: SEV: failed to INIT error 0x11, rc -5
-[    2.145240] ccp psp: SEV-SNP API:1.42 build:42
-[    2.446670] kvm: Nested Virtualization enabled
-[    2.446671] SVM: kvm: Nested Paging enabled
-[    2.446676] SEV supported: 0 ASIDs
-[    2.446677] SEV-ES and SEV-SNP supported: 16 ASIDs
-[    2.446678] SVM: kvm: Hyper-V enlightened NPT TLB flush enabled
-[    2.446678] SVM: kvm: Hyper-V Direct TLB Flush enabled
-```
-
-Only SEV-SNP is supported, not SEV or SEV-ES (hence the "SEV: failed to init" error).
-
-Double check support using snphost (https://github.com/virtee/snphost):
-```
-$ sudo snphost ok
-[ PASS ] - AMD CPU
-[ PASS ]   - Microcode support
-[ PASS ]   - Secure Memory Encryption (SME)
-[ PASS ]   - Secure Encrypted Virtualization (SEV)
-[ PASS ]     - Encrypted State (SEV-ES)
-[ PASS ]     - Secure Nested Paging (SEV-SNP)
-[ PASS ]       - VM Permission Levels
-[ PASS ]         - Number of VMPLs: 4
-[ PASS ]     - Physical address bit reduction: 5
-[ PASS ]     - C-bit location: 51
-[ PASS ]     - Number of encrypted guests supported simultaneously: 16
-[ PASS ]     - Minimum ASID value for SEV-enabled, SEV-ES disabled guest: 17
-[ PASS ]     - Reading /dev/sev: /dev/sev readable
-[ PASS ]     - Writing /dev/sev: /dev/sev writable
-[ PASS ]   - Page flush MSR: ENABLED
-[ PASS ] - KVM supported: API version: 12
-[ PASS ]   - SEV enabled in KVM: enabled
-[ PASS ]   - SEV-ES enabled in KVM: enabled
-[ PASS ]   - SEV-SNP enabled in KVM: enabled
-[ PASS ] - Memlock resource limit: Soft: 67108864 | Hard: 67108864
-```
-
-## Start Qemu SNP guest
-
-A script is provided that boots an SNP isolated nested guest using qemu with
-SNP support. Inspect the output for the required CLI flags.
-```
-$ sudo launch-qemu.sh -sev-snp -smp 1 -mem 1024
-```
-
-Login to the SNP isolateed nested guest using username `root` (no password)
-
-Check dmesg for correct SEV-SNP initialization:
-```
-root@debian:~# dmesg | grep SEV
-[    0.527729] Memory Encryption Features active: AMD SEV SEV-ES SEV-SNP
-[    0.756045] SEV: Using SNP CPUID table, 31 entries present.
-[    1.286659] SEV: SNP guest platform device initialized.
-[    1.571301] sev-guest sev-guest: Initialized SEV guest driver (using vmpck_id 0)
-```
-
-Fetch SNP attestation report using `snpguest` (https://github.com/virtee/snpguest):
-```
-root@debian:~# snpguest report --random
-root@debian:~# snpguest display report
-Attestation Report (1184 bytes):
-Version:                      2
-Guest SVN:                    0
-
-    Guest Policy (196608):
-    ABI Major:     0
-    ABI Minor:     0
-    SMT Allowed:   1
-    Migrate MA:    0
-    Debug Allowed: 0
-    Single Socket: 0
-Family ID:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-Image ID:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-VMPL:                         1
-Signature Algorithm:          1
-Current TCB:
-
-TCB Version:
-  Microcode:   206
-  SNP:         8
-  TEE:         0
-  Boot Loader: 3
-
-
-Platform Info (1):
-  TSME Enabled: 1
-  SMT Enabled:  0
-
-Author Key Encryption:        false
-Report Data:
-01 8e 35 b6 c4 01 28 f5 91 45 fe 8a 3b 34 d3 63
-ac 57 c6 77 e5 ef ed ae 5e 34 07 c0 05 ce 3f 19
-b8 e4 3f bb e7 a2 e6 03 4a d1 ec 7b 66 fd bd 0d
-3c e5 45 6d 8b 24 97 4e 70 6e 09 2f 7a b3 30 59
-
-Measurement:
-b5 d1 00 7b 59 06 ca d0 5d 41 63 37 23 94 a3 cc
-06 a3 d1 09 43 26 e4 30 41 53 dc 2d d9 b6 b2 e6
-88 bf b7 00 08 9f 44 88 55 03 fb f4 dc 19 b8 0c
-
-Host Data:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-ID Key Digest:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-Author Key Digest:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-Report ID:
-58 1d 06 30 4e cc 48 e5 d8 6f b9 ca b6 aa 29 3d
-9a a6 5a 59 a7 0e c3 4b ed 54 81 f7 f6 8a 02 d0
-
-Report ID Migration Agent:
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-
-Reported TCB:
-TCB Version:
-  Microcode:   115
-  SNP:         8
-  TEE:         0
-  Boot Loader: 3
-
-Chip ID:
-ed 97 60 ac 8e 4f 51 82 2f e6 44 e0 6b 26 88 0d
-56 ad b8 6f 46 13 60 4e 69 c4 db 9d b8 b2 a9 74
-ed 2a a6 6b 60 a7 aa 4d 64 84 1b fc df 4c 52 0d
-81 29 f2 cd ef 66 67 ca 79 a4 18 19 94 2b 03 ce
-
-Committed TCB:
-
-TCB Version:
-  Microcode:   115
-  SNP:         8
-  TEE:         0
-  Boot Loader: 3
-
-Current Build:                4
-Current Minor:                52
-Current Major:                1
-Committed Build:              4
-Committed Minor:              52
-Committed Major:              1
-Launch TCB:
-
-TCB Version:
-  Microcode:   115
-  SNP:         8
-  TEE:         0
-  Boot Loader: 3
-
-
-Signature:
-  R:
-4c 3a 09 cc 5d ab 2e c1 6d bd ab 17 f2 ec da 78
-1e 44 61 58 e2 88 38 e0 01 0f 6e b4 d8 66 c4 e1
-44 5b b9 8a 40 b2 e5 2a b4 50 96 ee 2e 0d 95 2a
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00
-
-  S:
-ec 83 c4 28 7b 46 a0 44 de 3d 65 d4 df 57 f2 bd
-ba ef a3 bc a5 ee a3 7b 34 99 88 31 9d c2 0f 93
-e0 81 46 02 d6 5a 51 38 b9 6d 7d 0d 94 1b b5 19
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00
-```
-
-Verify the SNP attestation report signature and certificate chain:
-```
-root@debian:~# snpguest fetch vcek Milan .
-root@debian:~# snpguest fetch ca Milan .
-root@debian:~# snpguest verify signature .
-VCEK signed the Attestation Report!
-root@debian:~# snpguest verify certs .
-The AMD ARK was self-signed!
-The AMD ASK was signed by the AMD ARK!
-The VCEK was signed by the AMD ASK!
-```
-
-## Building
-
-Only the host VM kernel is different compared to AMD's reference stack for
-baremetal SNP. The same SNP guest kernel/ovmf/qemu can be used as on baremetal.
-
-For more details on building kernel/userspace refer to README-baremetal.md or
-https://github.com/AMDESE/AMDSEV/tree/sev-snp-devel.
-
-### Gallery
-
-Install packer and then:
+  
+Run the following command to install the Linux kernel on the host machine.
 
 ```
-# export these variables before the build
-export AZURE_SUBSCRIPTION_ID=...
-export AZURE_RESOURCE_GROUP=...
-cd packer
-make resourcegroup
-make gallery
-make packer
+# cd snp-release-<date>
+# ./install.sh
 ```
 
-### Kernel
+Reboot the machine and choose SNP Host kernel from the grub menu.
 
-Install docker and then:
+Run the following commands to verify that SNP is enabled in the host.
+
+````
+# uname -r
+5.19.0-rc6-sev-es-snp+
+
+# dmesg | grep -i -e rmp -e sev
+SEV-SNP: RMP table physical address 0x0000000035600000 - 0x0000000075bfffff
+ccp 0000:23:00.1: sev enabled
+ccp 0000:23:00.1: SEV-SNP API:1.51 build:1
+SEV supported: 410 ASIDs
+SEV-ES and SEV-SNP supported: 99 ASIDs
+# cat /sys/module/kvm_amd/parameters/sev
+Y
+# cat /sys/module/kvm_amd/parameters/sev_es 
+Y
+# cat /sys/module/kvm_amd/parameters/sev_snp 
+Y
+
+````
+  
+*NOTE: If your SEV-SNP firmware is older than 1.51, see the "Upgrade SEV firmware" section to upgrade the firmware. *
+  
+## Prepare Guest
+
+Note: SNP requires OVMF be used as the guest BIOS in order to boot. This implies that the guest must have been initially installed using OVMF so that a UEFI partition is present.
+
+If you do not already have an installed guest, you can use the launch-qemu.sh script to create it:
+
+````
+# ./launch-qemu.sh -hda <your_qcow2_file> -cdrom <your_distro_installation_iso_file>
+````
+
+Boot up a guest (tested with Ubuntu 18.04 and 20.04, but any standard *.deb or *.rpm-based distro should work) and install the guest kernel packages built in the previous step. The guest kernel packages are available in 'snp-release-<DATE>/linux/guest' directory.
+
+## Launch SNP Guest
+
+To launch the SNP guest use the launch-qemu.sh script provided in this repository
+
+````
+# ./launch-qemu.sh -hda <your_qcow2_file> -sev-snp
+````
+
+To launch SNP disabled guest, simply remove the "-sev-snp" from the above command line.
+
+Once the guest is booted, run the following command inside the guest VM to verify that SNP is enabled:
+
+````
+$ dmesg | grep -i snp
+AMD Memory Encryption Features active: SEV SEV-ES SEV-SNP
+````
+
+## Upgrade SEV firmware
+
+The SEV-SNP support requires firmware version >= 1.51:1 (or 1.33 in hexadecimal). The latest SEV-SNP firmware is available on https://developer.amd.com/sev and via the linux-firmware project.
+
+The steps below document the firmware upgrade process for the latest SEV-SNP firmware available on https://developer.amd.com/sev at the time this was written. Currently, these steps only apply for Milan systems. A similar procedure can be used for newer firmwares as well:
+
 ```
-# this builds the host VM kernel
-./build-host.sh 
-
-# this builds the SNP guest VM firmware/kernel/disk image + SNP capable qemu
-./run.sh
+# wget https://download.amd.com/developer/eula/sev/amd_sev_fam19h_model0xh_1.54.01.zip
+# unzip amd_sev_fam19h_model0xh_1.54.01.zip
+# sudo mkdir -p /lib/firmware/amd
+# sudo cp amd_sev_fam19h_model0xh_1.54.01.sbin /lib/firmware/amd/amd_sev_fam19h_model0xh.sbin
 ```
 
-These scripts exist for convenience and wrap the `./build.sh` build script.
+Then either reboot the host, or reload the ccp driver to complete the firmware upgrade process:
+
+```
+sudo rmmod kvm_amd
+sudo rmmod ccp
+sudo modprobe ccp
+sudo modprobe kvm_amd
+```
+
+Current Milan SEV/SNP FW requires a PSP BootLoader version of 00.13.00.70 or greater. Milan AGESA PI 1.0.0.9 included a sufficient PSP BootLoader. Attempting to update to current SEV FW with an older BootLoader will fail. If the following error appears after updating the firmware manually, update the system to the latest available BIOS:
+
+```
+$ sudo dmesg | grep -i sev
+[    4.364896] ccp 0000:47:00.1: SEV: failed to INIT error 0x1, rc -5
+```
+For Genoa firmware updates, the system BIOS has to be updated to get the latest sev firmware.
+
+## Reference
+
+https://developer.amd.com/sev/
+
+[1] guest_memfd (a.k.a. "gmem", or "Unmapped Private Memory"): https://lore.kernel.org/kvm/20230914015531.1419405-1-seanjc@google.com/

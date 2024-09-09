@@ -9,7 +9,7 @@ KERNEL_GUEST_BRANCH="v6.7"
 
 # qemu commit
 QEMU_GIT_URL="https://github.com/AMDESE/qemu.git"
-QEMU_BRANCH="snp-latest"
+QEMU_BRANCH="snp-v3-wip"
 
 # guest bios
 #   An AP creation fix added after the 'edk2-stable202302' tag/release is
