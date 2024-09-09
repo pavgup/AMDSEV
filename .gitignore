@@ -1,3 +1,4 @@
 distros/ubuntu-18.04/src
 distros/fedora-28/src
+.ccache
 source-commit.*

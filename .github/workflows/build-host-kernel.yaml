@@ -1,0 +1,32 @@
+name: build host kernel
+on:
+  push:
+    branches:
+    - sev-snp-devel
+    - nested-snp-upm
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+    build-host-kernel:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout
+          uses: actions/checkout@v2
+        - name: ccache
+          uses: hendrikmuhs/ccache-action@v1.2
+          with:
+            max-size: "1G"
+        - name: Build host kernel
+          run: |
+            export PATH="/usr/lib/ccache:$PATH"
+            ./build-host.sh
+        - name: Archive artifacts
+          uses: actions/upload-artifact@v2
+          with:
+            name: host-kernel
+            path: |
+              linux/*.deb

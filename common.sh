@@ -67,8 +67,8 @@ build_kernel()
 		run_cmd $MAKE distclean
 
 		pushd ${V} >/dev/null
-			run_cmd git fetch current
-			run_cmd git checkout current/${BRANCH}
+			run_cmd git fetch current ${BRANCH}
+			run_cmd git checkout FETCH_HEAD
 			COMMIT=$(git log --format="%h" -1 HEAD)
 
 			if [ "${V}" = "guest" ]; then
@@ -89,6 +89,7 @@ build_kernel()
 			run_cmd ./scripts/config --disable LOCALVERSION_AUTO
 			run_cmd ./scripts/config --enable  EXPERT
 			run_cmd ./scripts/config --enable  DEBUG_INFO
+			run_cmd ./scripts/config --enable  DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
 			run_cmd ./scripts/config --enable  DEBUG_INFO_REDUCED
 			run_cmd ./scripts/config --enable  AMD_MEM_ENCRYPT
 			run_cmd ./scripts/config --disable AMD_MEM_ENCRYPT_ACTIVE_BY_DEFAULT
@@ -97,12 +98,15 @@ build_kernel()
 			run_cmd ./scripts/config --disable SYSTEM_TRUSTED_KEYS
 			run_cmd ./scripts/config --disable SYSTEM_REVOCATION_KEYS
 			run_cmd ./scripts/config --disable MODULE_SIG_KEY
-			run_cmd ./scripts/config --module  SEV_GUEST
 			run_cmd ./scripts/config --disable IOMMU_DEFAULT_PASSTHROUGH
 			run_cmd ./scripts/config --disable PREEMPT_COUNT
 			run_cmd ./scripts/config --disable PREEMPTION
 			run_cmd ./scripts/config --disable PREEMPT_DYNAMIC
 			run_cmd ./scripts/config --disable DEBUG_PREEMPT
+			run_cmd ./scripts/config --enable IKCONFIG
+			run_cmd ./scripts/config --enable IKCONFIG_PROC
+			run_cmd ./scripts/config --enable UNWINDER_FRAME_POINTER
+			run_cmd ./scripts/config --enable STACK_VALIDATION
 			run_cmd ./scripts/config --enable  CGROUP_MISC
 			run_cmd ./scripts/config --module  X86_CPUID
 			run_cmd ./scripts/config --disable UBSAN
@@ -142,7 +146,7 @@ build_kernel()
 		yes "" | $MAKE olddefconfig
 
 		# Build 
-		run_cmd $MAKE >/dev/null
+		run_cmd $MAKE
 
 		if [ "$ID" = "debian" ] || [ "$ID_LIKE" = "debian" ]; then
 			run_cmd $MAKE bindeb-pkg
