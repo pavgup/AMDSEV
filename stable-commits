@@ -3,9 +3,9 @@
 #
 
 # hypervisor commit
-KERNEL_GIT_URL="https://github.com/jepio/linux.git"
-KERNEL_HOST_BRANCH="nested-snp-upm-20240123"
-KERNEL_GUEST_BRANCH="v6.7"
+KERNEL_GIT_URL="https://github.com/confidential-containers/linux.git"
+KERNEL_HOST_BRANCH="amd-snp-host-202402240000"
+KERNEL_GUEST_BRANCH="amd-snp-guest-202402240000"
 
 # qemu commit
 QEMU_GIT_URL="https://github.com/AMDESE/qemu.git"
